@@ -94,7 +94,9 @@ if [ "${ALLOW_ILLEGAL:-0}" != "1" ]; then
   fi
 fi
 
-"$OBJCOPY" -O binary --only-section=.text --only-section=.rodata "$ELF" "$IMEM_BIN"
+# .rodata lives in RAM, not ROM -- see sw/linker/linker.ld's header
+# comment for why (no hardware path from a data-side load to ROM).
+"$OBJCOPY" -O binary --only-section=.text "$ELF" "$IMEM_BIN"
 "$OBJCOPY" -O binary --only-section=.data "$ELF" "$DMEM_BIN"
 
 # Both hex files are addressed relative to their own region (0-based): the

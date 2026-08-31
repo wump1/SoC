@@ -11,16 +11,17 @@
 # the part `make test` actually depends on -- exits nonzero if anything
 # failed to compile or any TESTBENCH_RESULT was not PASS.
 #
-# Usage: scripts/run_tests.sh [unit|core|all]   (default: all)
+# Usage: scripts/run_tests.sh [unit|core|soc|all]   (default: all)
 #   unit -- tb/unit/ only, no program builds needed.
-#   core -- sw/asm/ programs + tb/core/ against both DUTs.
-#   all  -- both of the above (this is what `make test` runs).
+#   core -- sw/asm/+sw/baremetal/ programs + tb/core/ against both bare DUTs.
+#   soc  -- same programs + tb/soc/ against the full soc_top integration.
+#   all  -- all of the above (this is what `make test` runs).
 set -uo pipefail
 
 MODE="${1:-all}"
 case "$MODE" in
-  unit|core|all) ;;
-  *) echo "usage: $0 [unit|core|all]" >&2; exit 1 ;;
+  unit|core|soc|all) ;;
+  *) echo "usage: $0 [unit|core|soc|all]" >&2; exit 1 ;;
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,6 +37,8 @@ RTL_BASE="rtl/core/rv32_pkg.sv rtl/core/pc.sv rtl/core/regfile.sv rtl/core/alu.s
 RTL_SINGLE="$RTL_BASE rtl/core/rv32_single.sv"
 RTL_PIPE="$RTL_BASE rtl/pipeline/pipe_if_id.sv rtl/pipeline/pipe_id_ex.sv
            rtl/pipeline/pipe_ex_mem.sv rtl/pipeline/pipe_mem_wb.sv rtl/pipeline/rv32_core.sv"
+RTL_SOC="$RTL_PIPE rtl/soc/imem.sv rtl/soc/dmem.sv rtl/soc/gpio.sv rtl/soc/uart_tx.sv
+         rtl/soc/reset_sync.sv rtl/soc/address_decoder.sv rtl/soc/soc_top.sv"
 
 TOTAL_PASS=0
 TOTAL_FAIL=0
@@ -45,7 +48,7 @@ FAILED_TESTS=()
 run_one() {
   local label="$1" vvp_out="$2"
   shift 2
-  iverilog -g2012 -I tb/common -I tb/core -o "$vvp_out" "$@" >"$vvp_out.compile.log" 2>&1
+  iverilog -g2012 -I tb/common -I tb/core -I tb/soc -o "$vvp_out" "$@" >"$vvp_out.compile.log" 2>&1
   if [ ! -f "$vvp_out" ]; then
     echo "  [FAIL] $label -- COMPILE ERROR, see $vvp_out.compile.log"
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
@@ -77,9 +80,9 @@ if [ "$MODE" = "unit" ] || [ "$MODE" = "all" ]; then
   done
 fi
 
-if [ "$MODE" = "core" ] || [ "$MODE" = "all" ]; then
-  echo "== Building sw/asm/ programs =="
-  for src in sw/asm/*.S; do
+if [ "$MODE" = "core" ] || [ "$MODE" = "soc" ] || [ "$MODE" = "all" ]; then
+  echo "== Building sw/asm/ + sw/baremetal/ programs =="
+  for src in sw/asm/*.S sw/baremetal/*.c; do
     name="$(basename "${src%.*}")"
     extra_env=()
     [ "$name" = "illegal_safety" ] && extra_env=(ALLOW_ILLEGAL=1)
@@ -91,7 +94,9 @@ if [ "$MODE" = "core" ] || [ "$MODE" = "all" ]; then
       echo "  [ok]   build $name"
     fi
   done
+fi
 
+if [ "$MODE" = "core" ] || [ "$MODE" = "all" ]; then
   echo "== Core tests: rv32_single =="
   for tb in tb/core/tb_*.sv; do
     name="$(basename "${tb%.*}")"
@@ -102,6 +107,14 @@ if [ "$MODE" = "core" ] || [ "$MODE" = "all" ]; then
   for tb in tb/core/tb_*.sv; do
     name="$(basename "${tb%.*}")"
     run_one "$name [pipeline]" "$BUILD_SIM/pipe_$name.vvp" -DCORE_DUT=rv32_core $RTL_PIPE tb/common/sram_model.sv "$tb"
+  done
+fi
+
+if [ "$MODE" = "soc" ] || [ "$MODE" = "all" ]; then
+  echo "== SoC tests: soc_top =="
+  for tb in tb/soc/tb_*.sv; do
+    name="$(basename "${tb%.*}")"
+    run_one "$name [soc]" "$BUILD_SIM/soc_$name.vvp" $RTL_SOC "$tb"
   done
 fi
 

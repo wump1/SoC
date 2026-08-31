@@ -15,7 +15,25 @@ set -uo pipefail
 #   tb_decoder.sv's standalone unit testing; the datapath only needs
 #   rd/rs1/rs2 and control_t (which already carries funct3).
 # instr[6:0] unused in imm_gen: it doesn't need the opcode field.
-BENIGN_PATTERN="UNUSEDPARAM|Signal is not used: 'imem_ready'|Signal is not used: 'dmem_ready'|Cell pin connected by name with empty reference: 'opcode'|Cell pin connected by name with empty reference: 'funct3'|Cell pin connected by name with empty reference: 'funct7'|Bits of signal are not used: 'instr'\[6:0\]"
+# trace/dbg_illegal/dbg_misaligned unused in soc_top: debug-only, reached
+#   by hierarchical reference from testbenches, never wired to a port.
+# ram_ready unused in address_decoder: same zero-wait-state reasoning as
+#   imem_ready/dmem_ready above.
+# addr[...] bits unused in imem/dmem: high bits already consumed by
+#   address_decoder's region select; low 2 bits/wstrb (not addr) pick the
+#   byte lane.
+# wdata[31:8] unused in gpio: GPIO_WIDTH=8, a store's upper bits are
+#   simply discarded.
+BENIGN_PATTERN="UNUSEDPARAM\
+|Signal is not used: 'imem_ready'|Signal is not used: 'dmem_ready'\
+|Cell pin connected by name with empty reference: 'opcode'\
+|Cell pin connected by name with empty reference: 'funct3'\
+|Cell pin connected by name with empty reference: 'funct7'\
+|Bits of signal are not used: 'instr'\[6:0\]\
+|Signal is not used: 'trace'|Signal is not used: 'dbg_illegal'|Signal is not used: 'dbg_misaligned'\
+|Signal is not used: 'ram_ready'|Signal is not used: 'req'\
+|Bits of signal are not used: 'addr'\
+|Bits of signal are not used: 'wdata'\[31:8\]"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -27,6 +45,8 @@ RTL_BASE="rtl/core/rv32_pkg.sv rtl/core/pc.sv rtl/core/regfile.sv rtl/core/alu.s
 RTL_SINGLE="$RTL_BASE rtl/core/rv32_single.sv"
 RTL_PIPE="$RTL_BASE rtl/pipeline/pipe_if_id.sv rtl/pipeline/pipe_id_ex.sv
            rtl/pipeline/pipe_ex_mem.sv rtl/pipeline/pipe_mem_wb.sv rtl/pipeline/rv32_core.sv"
+RTL_SOC="$RTL_PIPE rtl/soc/imem.sv rtl/soc/dmem.sv rtl/soc/gpio.sv rtl/soc/uart_tx.sv
+         rtl/soc/reset_sync.sv rtl/soc/address_decoder.sv rtl/soc/soc_top.sv"
 
 fail=0
 
@@ -48,6 +68,7 @@ lint_one() {
 
 lint_one rv32_single $RTL_SINGLE
 lint_one rv32_core $RTL_PIPE
+lint_one soc_top $RTL_SOC
 
 if [ "$fail" -ne 0 ]; then
   echo "lint: FAILED -- see undocumented warnings/errors above" >&2

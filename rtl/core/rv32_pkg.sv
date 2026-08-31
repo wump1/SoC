@@ -90,6 +90,54 @@ package rv32_pkg;
     logic       illegal;
   } control_t;
 
+  // Per-stage control bundles for the pipeline registers (Section 6.1:
+  // "travels only as far as required"). Each trims fields the bundle has
+  // already been fully consumed by that point in the pipe:
+  //  - id_ex: drops imm_sel (imm_gen already resolved it into `imm` in ID).
+  //  - ex_mem: drops branch/jump/jalr/alu_src_imm/alu_src_pc/alu_op (all
+  //    EX-only -- branch/jump redirect is decided combinationally in EX
+  //    off ID/EX's bundle, and does not need to be re-decided in MEM).
+  //  - mem_wb: drops mem_read/wb_sel/funct3 too -- the wb_sel mux is
+  //    resolved combinationally in MEM (once load data is available), so
+  //    MEM/WB only needs to carry the *already-selected* writeback value,
+  //    not how it was selected.
+  typedef struct packed {
+    logic       reg_write;
+    logic       mem_read;
+    logic       mem_write;
+    logic       branch;
+    logic       jump;
+    logic       jalr;
+    logic       alu_src_imm;
+    logic       alu_src_pc;
+    alu_op_e    alu_op;
+    wb_sel_e    wb_sel;
+    logic [2:0] funct3;
+    logic       illegal;
+  } id_ex_ctrl_t;
+
+  typedef struct packed {
+    logic       reg_write;
+    logic       mem_read;
+    logic       mem_write;
+    wb_sel_e    wb_sel;
+    logic [2:0] funct3;
+    logic       illegal;
+  } ex_mem_ctrl_t;
+
+  typedef struct packed {
+    logic reg_write;
+    logic illegal;
+  } mem_wb_ctrl_t;
+
+  // EX-stage operand forwarding select (Section 7.1 priority: EX/MEM is
+  // newer than MEM/WB, so it wins when both match).
+  typedef enum logic [1:0] {
+    FWD_NONE   = 2'b00, // use ID/EX's latched register value
+    FWD_EX_MEM = 2'b01,
+    FWD_MEM_WB = 2'b10
+  } fwd_sel_e;
+
   // Retired-instruction trace, emitted by both the single-cycle core (every
   // cycle) and the pipelined core (on WB commit). Common shape lets a
   // testbench diff the two as a reference-model comparison (Section 9).

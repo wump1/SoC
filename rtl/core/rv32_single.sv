@@ -137,4 +137,11 @@ module rv32_single
   assign trace.mem_wdata = dmem_wdata;
   assign trace.mem_wstrb = dmem_wstrb;
 
+  always_ff @(posedge clk) begin
+    if (reset_n) begin
+      assert (pc_q[1:0] == 2'b00)
+        else $error("[ASSERT] PC is not word-aligned: %08h", pc_q);
+    end
+  end
+
 endmodule : rv32_single

@@ -305,6 +305,13 @@ module rv32_core
   // directly instead of it silently surfacing as a wrong architectural
   // result somewhere downstream.
   // ======================================================================
+  // Simulation-only: immediate assertions don't synthesize to hardware, and
+  // Yosys 0.33's Verilog frontend cannot even parse the `assert ... else`
+  // statement grammar (confirmed independently of -noassert). `SYNTHESIS`
+  // is implicitly defined by `read_verilog` (absent `-nosynthesis`), so
+  // this block compiles under Icarus/Verilator (neither defines it) and is
+  // skipped by Yosys before it ever reaches the parser.
+`ifndef SYNTHESIS
   always_ff @(posedge clk) begin
     if (reset_n) begin
       assert (!(!mem_wb_valid && mem_wb_ctrl.reg_write))
@@ -315,5 +322,6 @@ module rv32_core
         else $error("[ASSERT] PC is not word-aligned: %08h", pc_q);
     end
   end
+`endif
 
 endmodule : rv32_core

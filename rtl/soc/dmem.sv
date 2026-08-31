@@ -3,8 +3,14 @@
 // with byte-strobed synchronous writes. Zero-wait-state (combinational
 // read, ready tied high), matching the core boundary's baseline.
 module dmem #(
-  parameter int unsigned ADDR_WIDTH = 16, // bytes; 64KB per docs/memory_map.md
+  parameter int unsigned ADDR_WIDTH = 16 // bytes; 64KB per docs/memory_map.md
+`ifndef SYNTHESIS
+  // See imem.sv: simulation-only (Yosys can't parse a `string` parameter),
+  // set only via testbench `defparam` on the leaf instance, never by
+  // soc_top. FPGA memory init is a separate, tool-specific known limitation.
+  ,
   parameter string       INIT_FILE  = ""
+`endif
 )(
   input  logic        clk,
 
@@ -20,11 +26,21 @@ module dmem #(
   localparam int unsigned SIZE = (1 << ADDR_WIDTH);
   logic [7:0] mem [0:SIZE-1];
 
+`ifndef SYNTHESIS
   integer k;
   initial begin
     for (k = 0; k < SIZE; k = k + 1) mem[k] = 8'h00;
     if (INIT_FILE != "") $readmemh(INIT_FILE, mem);
   end
+`else
+  // See imem.sv: loads the same representative program's initial RAM
+  // image (.data/.rodata) purely for a meaningful M9 utilization number.
+  // Override with `-D SYNTH_DMEM_INIT="path/to/other.dmem.hex"`.
+`ifndef SYNTH_DMEM_INIT
+`define SYNTH_DMEM_INIT "build/programs/uart_hello.dmem.hex"
+`endif
+  initial $readmemh(`SYNTH_DMEM_INIT, mem);
+`endif
 
   // See imem.sv: addr's high bits were already consumed by
   // address_decoder's region select, and wstrb (not addr's low 2 bits)

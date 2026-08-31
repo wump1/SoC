@@ -137,11 +137,19 @@ module rv32_single
   assign trace.mem_wdata = dmem_wdata;
   assign trace.mem_wstrb = dmem_wstrb;
 
+  // Simulation-only: immediate assertions don't synthesize to hardware, and
+  // Yosys 0.33's Verilog frontend cannot even parse the `assert ... else`
+  // statement grammar (confirmed independently of -noassert). `SYNTHESIS`
+  // is implicitly defined by `read_verilog` (absent `-nosynthesis`), so
+  // this block compiles under Icarus/Verilator (neither defines it) and is
+  // skipped by Yosys before it ever reaches the parser.
+`ifndef SYNTHESIS
   always_ff @(posedge clk) begin
     if (reset_n) begin
       assert (pc_q[1:0] == 2'b00)
         else $error("[ASSERT] PC is not word-aligned: %08h", pc_q);
     end
   end
+`endif
 
 endmodule : rv32_single

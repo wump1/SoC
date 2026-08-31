@@ -14,9 +14,12 @@
 *.hex
 *.bin
 
-# Synthesis / PnR intermediates.
+# Synthesis / PnR intermediates. The full raw logs are regenerable via
+# `make synth`/`synth-soc-smoketest`/`pnr`/`timing`/`bitstream`; the curated,
+# permanent record of what they produced lives in docs/results/ instead.
 synth/*.json
 synth/*.log
+synth/reports/
 *.asc
 *.bit
 

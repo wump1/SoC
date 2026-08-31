@@ -1,0 +1,92 @@
+// Shared core-level testbench harness, textually included (not a module)
+// so each test's top-level module can freely reference `dut.*` and
+// `dut_mem.*` hierarchically for its own checks after the include.
+//
+// Before including this file, define:
+//   `TEST_IMEM_HEX "path/to/program.imem.hex"
+//   `TEST_DMEM_HEX "path/to/program.dmem.hex"
+//
+// Programs signal completion by jumping to themselves (`halt: jal x0,
+// halt`, emitted by every directed test program): once the pipeline/core
+// retires the same PC twice in a row, wait_for_halt() returns and the
+// including testbench does its own tb_check() calls against final
+// architectural state.
+logic clk = 0;
+logic reset_n;
+always #5 clk = ~clk;
+
+logic        imem_req;
+logic [31:0] imem_addr, imem_rdata;
+logic        imem_ready;
+logic        dmem_req, dmem_we;
+logic [31:0] dmem_addr, dmem_wdata, dmem_rdata;
+logic [3:0]  dmem_wstrb;
+logic        dmem_ready;
+trace_t      trace;
+logic        dbg_illegal, dbg_misaligned;
+
+rv32_single dut (
+  .clk, .reset_n,
+  .imem_req, .imem_addr, .imem_rdata, .imem_ready,
+  .dmem_req, .dmem_we, .dmem_addr, .dmem_wdata, .dmem_wstrb, .dmem_rdata, .dmem_ready,
+  .trace, .dbg_illegal, .dbg_misaligned
+);
+
+sram_model #(
+  .IMEM_INIT_FILE(`TEST_IMEM_HEX),
+  .DMEM_INIT_FILE(`TEST_DMEM_HEX)
+) dut_mem (
+  .clk,
+  .i_req(imem_req), .i_addr(imem_addr), .i_rdata(imem_rdata), .i_ready(imem_ready),
+  .d_req(dmem_req), .d_we(dmem_we), .d_addr(dmem_addr), .d_wdata(dmem_wdata),
+  .d_wstrb(dmem_wstrb), .d_rdata(dmem_rdata), .d_ready(dmem_ready)
+);
+
+// Sticky flags: most directed tests assert these never fire, since a hand
+// written program that trips either one has a bug in the *test*, not just
+// a CPU behavior to characterize.
+logic sticky_illegal, sticky_misaligned;
+always_ff @(posedge clk) begin
+  if (!reset_n) begin
+    sticky_illegal    <= 1'b0;
+    sticky_misaligned <= 1'b0;
+  end else begin
+    if (dbg_illegal)    sticky_illegal    <= 1'b1;
+    if (dbg_misaligned) sticky_misaligned <= 1'b1;
+  end
+end
+
+task automatic apply_reset;
+  reset_n = 0;
+  repeat (3) @(posedge clk);
+  #1;
+  reset_n = 1;
+endtask
+
+task automatic wait_for_halt(input integer max_cycles);
+  logic [31:0] prev_pc;
+  logic        halted;
+  integer      cyc;
+  begin
+    prev_pc = 32'hFFFF_FFFF;
+    halted  = 1'b0;
+    cyc     = 0;
+    while (!halted) begin
+      @(posedge clk);
+      #1;
+      if (trace.valid && trace.pc === prev_pc) halted = 1'b1;
+      else prev_pc = trace.pc;
+      cyc = cyc + 1;
+      if (cyc > max_cycles) begin
+        $display("TESTBENCH_RESULT: FAIL (timeout: no halt loop after %0d cycles)", max_cycles);
+        $finish;
+      end
+    end
+  end
+endtask
+
+initial begin : global_watchdog
+  #10_000_000;
+  $display("TESTBENCH_RESULT: FAIL (global simulation timeout)");
+  $finish;
+end

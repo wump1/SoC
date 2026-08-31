@@ -70,17 +70,22 @@ module tb_regfile;
     #1;
     tb_check(rdata1 === rdata2 && rdata1 === 32'hCAFEBABE, "both read ports agree on the same address");
 
-    // Write-first same-cycle bypass: read the address being written THIS
-    // cycle and expect the new value combinationally, not the old one.
+    // No same-cycle bypass: reading the address being written THIS cycle
+    // must see the OLD stored value (0, never written before), and only
+    // pick up the new value on the cycle after the write edge. See
+    // regfile.sv's header comment -- a same-cycle bypass here creates a
+    // real combinational loop for any single-cycle instruction whose rd
+    // equals its own rs1/rs2 (e.g. `addi x1,x1,1`), since the ALU input
+    // and the writeback value would depend on each other.
     raddr1 = 5'd5;
     we = 1; waddr = 5'd5; wdata = 32'h5A5A5A5A;
     #1;
-    tb_check(rdata1 === 32'h5A5A5A5A,
-      $sformatf("write-first bypass: same-cycle read sees new data, got %08h", rdata1));
+    tb_check(rdata1 === 32'h0,
+      $sformatf("no write-first bypass: same-cycle read still sees the old value, got %08h", rdata1));
     @(posedge clk);
     #1;
     we = 0;
-    tb_check(rdata1 === 32'h5A5A5A5A, "value persists on the following cycle");
+    tb_check(rdata1 === 32'h5A5A5A5A, "new value visible starting the cycle after the write edge");
 
     // Reset clears all previously written registers.
     reset_n = 0;

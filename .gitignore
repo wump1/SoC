@@ -1,0 +1,24 @@
+# Generated build artifacts (regenerate via `make`; see Makefile).
+/build/
+/fpga/build/*
+!/fpga/build/.gitkeep
+
+# Simulation / toolchain outputs that may land next to sources during
+# ad-hoc runs.
+*.vvp
+*.vcd
+*.fst
+*.elf
+*.o
+*.dump
+*.hex
+*.bin
+
+# Synthesis / PnR intermediates.
+synth/*.json
+synth/*.log
+*.asc
+*.bit
+
+__pycache__/
+*.pyc

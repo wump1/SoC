@@ -53,6 +53,15 @@ sram_model #(
   .d_wstrb(dmem_wstrb), .d_rdata(dmem_rdata), .d_ready(dmem_ready)
 );
 
+// Waveform dump, only when explicitly requested (-DDUMP_VCD=1, wired up
+// by `make wave`) -- every other run skips the overhead.
+`ifdef DUMP_VCD
+initial begin
+  $dumpfile(`VCD_FILE);
+  $dumpvars(0, dut);
+end
+`endif
+
 // Sticky flags: most directed tests assert these never fire, since a hand
 // written program that trips either one has a bug in the *test*, not just
 // a CPU behavior to characterize.

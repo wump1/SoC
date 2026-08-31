@@ -7,6 +7,11 @@
 #   program.S/.c -> gcc/as -> program.elf -> objdump -> program.dump
 #                -> objcopy -> raw binary -> bin2hex.py -> *.hex -> $readmemh
 #
+# A .c source is automatically linked together with sw/startup/start.S
+# (stack init, .bss clear, call main) -- a .S source is assumed to define
+# its own self-contained _start, as every sw/asm/ test does, and is built
+# alone.
+#
 # Usage: scripts/build_program.sh <source.S|source.c> <output_dir>
 set -euo pipefail
 
@@ -19,6 +24,11 @@ SRC="$1"
 OUT_DIR="$2"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+SOURCES=("$SRC")
+if [[ "$SRC" == *.c ]]; then
+  SOURCES=("$REPO_ROOT/sw/startup/start.S" "$SRC")
+fi
 
 RISCV_PREFIX="${RISCV_PREFIX:-riscv64-unknown-elf-}"
 CC="${RISCV_PREFIX}gcc"
@@ -46,7 +56,7 @@ DMEM_BIN="$OUT_DIR/$NAME.dmem.bin"
 IMEM_HEX="$OUT_DIR/$NAME.imem.hex"
 DMEM_HEX="$OUT_DIR/$NAME.dmem.hex"
 
-"$CC" "${CFLAGS[@]}" -o "$ELF" "$SRC"
+"$CC" "${CFLAGS[@]}" -o "$ELF" "${SOURCES[@]}"
 "$OBJDUMP" -d "$ELF" > "$DUMP"
 
 # Every mnemonic the objdump shows must be either a real RV32I instruction

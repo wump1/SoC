@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // RV32I shared types, opcodes, and control encodings.
 // Single source of truth for every RTL module in this project (Section 10.1:
 // enums/typedefs instead of magic constants).
